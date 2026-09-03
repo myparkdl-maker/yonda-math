@@ -30,8 +30,21 @@ def get_sort_key(file):
         return name 
 
 def clean_text_for_word(text):
+    # LaTeX 기호들을 일반 텍스트 기호로 완벽 변환
     text = text.replace(r'\div', '÷')
     text = text.replace(r'\times', '×')
+    text = text.replace(r'\triangle', '삼각형 ')
+    text = text.replace(r'\parallel', '∥')
+    text = text.replace(r'\perp', '⊥')
+    text = text.replace(r'\angle', '∠')
+    text = text.replace(r'\pi', 'π')
+    
+    # 선분/텍스트 오버라인 코드 처리 (예: \overline{AB} -> 선분 AB)
+    text = re.sub(r'\\overline\{[^}]*\\text\{([^}]+)\}\}', r'선분 \1', text)
+    text = re.sub(r'\\overline\{([^}]+)\}', r'선분 \1', text)
+    text = re.sub(r'\\text\{([^}]+)\}', r'\1', text)
+    
+    # 분수 처리
     text = text.replace(r'\frac{1}{2}', '1/2')
     text = text.replace(r'\frac{1}{3}', '1/3')
     text = text.replace(r'\frac{1}{4}', '1/4')
@@ -41,6 +54,9 @@ def clean_text_for_word(text):
     text = text.replace(r'\frac{1}{8}', '1/8')
     text = text.replace(r'\frac{1}{9}', '1/9')
     text = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', r'\1/\2', text)
+    
+    # 남은 불필요한 백슬래시 및 마크다운 기호 제거
+    text = text.replace('\\', ' ')
     text = text.replace('**', '')
     text = text.replace('$', '')
     return text
@@ -48,6 +64,7 @@ def clean_text_for_word(text):
 def analyze_math_image(image):
     prompt = """
     이 이미지에 있는 수학 문제를 완벽하게 분석해줘.
+    *매우 중요*: 삼각형 기호는 '\\triangle' 같은 코드를 쓰지 말고 그냥 '삼각형'이라고 적고, 선분 표시는 '\\overline' 대신 '선분 AB'처럼 일반 글자로 적어줘. 나누기는 '÷', 곱하기는 '×'를 사용하고 LaTeX 수식 코드를 절대 사용하지 마.
     여러 문제가 있다면 문제 하나마다 반드시 '===='로 구분해줘.
     반드시 아래 형식을 지켜서 작성해줘. 다른 형식을 쓰지 마.
     
@@ -72,7 +89,6 @@ def parse_math_blocks(analyzed_blocks_list):
             
             q_text, concept_text, step_text, tip_text = "", "", "", ""
             
-            # 정규식을 이용해 태그별 내용을 확실하게 추출
             q_match = re.search(r'\[Q\](.*?)(?=\[CONCEPT\]|\[STEP\]|\[TIP\]|$)', block, re.DOTALL)
             concept_match = re.search(r'\[CONCEPT\](.*?)(?=\[STEP\]|\[TIP\]|\[Q\]|$)', block, re.DOTALL)
             step_match = re.search(r'\[STEP\](.*?)(?=\[TIP\]|\[CONCEPT\]|\[Q\]|$)', block, re.DOTALL)
@@ -83,7 +99,6 @@ def parse_math_blocks(analyzed_blocks_list):
             if step_match: step_text = step_match.group(1).strip()
             if tip_match: tip_text = tip_match.group(1).strip()
             
-            # 만약 파싱이 원활하지 않았다면 블록 전체를 문제로 처리
             if not q_text and not step_text:
                 q_text = block.strip()
                 step_text = "풀이 생성 완료"
