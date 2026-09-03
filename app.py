@@ -8,7 +8,7 @@ import socket
 import qrcode
 import re
 
-API_KEY = "AQ.Ab8RN6JeD7GDknfM9jFK3SNq7eMlc0iKMp8pEAk9NZLgw17wzA"
+API_KEY = "AQ.Ab8RN6KytEbdudB-UQMK_oLPtchUwEWBs9qB7KqzY8ny5a8Xag"
 client = genai.Client(api_key=API_KEY)
 
 def get_local_ip():
