@@ -40,7 +40,6 @@ def clean_text_for_word(text):
     text = text.replace(r'\frac{1}{7}', '1/7')
     text = text.replace(r'\frac{1}{8}', '1/8')
     text = text.replace(r'\frac{1}{9}', '1/9')
-    
     text = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', r'\1/\2', text)
     text = text.replace('**', '')
     text = text.replace('$', '')
@@ -58,6 +57,7 @@ def analyze_math_image(image):
     [TIP] 아빠의 친절한 조언 및 실수 방지 팁
     ====
     """
+    # 안정적인 클라우드 전용 모델로 지정
     response = client.models.generate_content(
         model='gemini-3.5-flash',
         contents=[image, prompt],
