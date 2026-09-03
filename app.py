@@ -6,6 +6,7 @@ from docx import Document
 import io
 import socket
 import qrcode
+import re
 
 API_KEY = "AQ.Ab8RN6JeD7GDknfM9jFK3SNq7eMlc0iKMp8pEAk9NZLgw17wzA"
 client = genai.Client(api_key=API_KEY)
@@ -28,16 +29,37 @@ def get_sort_key(file):
     except ValueError:
         return name 
 
+def clean_text_for_word(text):
+    # LaTeX 기호나 특수 수식 코드를 일반 사람이 읽기 좋은 기호로 변환
+    text = text.replace(r'\div', '÷')
+    text = text.replace(r'\times', '×')
+    text = text.replace(r'\frac{1}{2}', '1/2')
+    text = text.replace(r'\frac{1}{3}', '1/3')
+    text = text.replace(r'\frac{1}{4}', '1/4')
+    text = text.replace(r'\frac{1}{5}', '1/5')
+    text = text.replace(r'\frac{1}{6}', '1/6')
+    text = text.replace(r'\frac{1}{7}', '1/7')
+    text = text.replace(r'\frac{1}{8}', '1/8')
+    text = text.replace(r'\frac{1}{9}', '1/9')
+    
+    # 일반적인 분수 형태 처리 (예: \frac{a}{b} -> a/b)
+    text = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', r'\1/\2', text)
+    
+    # 마크다운 강조 기호 제거
+    text = text.replace('**', '')
+    text = text.replace('$', '')
+    return text
+
 def analyze_math_image(image):
     prompt = """
-    이 이미지에 있는 수학 문제를 처음부터 끝까지 빠짐없이 분석해줘.
-    결과를 워드 파일 표나 깔끔한 구조로 넣을 거니까, 반드시 아래의 양식을 엄격하게 지켜서 작성해.
-    문제 하나 분석이 끝날 때마다 반드시 '====' 기호를 넣어서 구분해줘.
+    이 이미지에 있는 수학 문제를 분석해서 아래 양식에 맞춰 완벽한 해설을 작성해줘.
+    *주의*: 나누기 기호는 '\\div' 같은 코드를 쓰지 말고 반드시 일반 기호인 '÷'를 쓰고, 곱하기는 '×', 분수는 '1/2' 같은 형태로 직접 기호로 적어줘. LaTeX 코드를 절대 사용하지 마.
+    각 문제의 구분은 반드시 '===='로 해줘.
     
-    [Q] (여기에 수학 문제 번호 및 원문 내용 요약)
-    [CONCEPT] (여기에 이 문제를 풀기 위해 알아야 하는 핵심 개념이나 공식)
-    [STEP] (여기에 아이가 이해하기 쉽도록 단계별로 풀어주는 풀이 과정, 예: 1단계 ~~)
-    [TIP] (여기에 아빠가 다정하게 들려주는 조언이나 자주 하는 실수 방지 팁)
+    [Q] 문제 내용 (번호와 문제 텍스트)
+    [CONCEPT] 이 문제를 푸는 데 필요한 핵심 개념이나 공식
+    [STEP] 아이가 이해하기 쉬운 상세한 단계별 풀이 과정
+    [TIP] 아빠의 친절한 조언 및 실수 방지 팁
     ====
     """
     response = client.models.generate_content(
@@ -54,21 +76,38 @@ def parse_math_blocks(analyzed_blocks_list):
                 continue
             
             q_text, concept_text, step_text, tip_text = "", "", "", ""
+            current_section = None
             
             for line in block.strip().split('\n'):
-                line = line.strip()
-                if line.startswith('[Q]'): q_text = line.replace('[Q]', '').strip()
-                elif line.startswith('[CONCEPT]'): concept_text = line.replace('[CONCEPT]', '').strip()
-                elif line.startswith('[STEP]'): step_text += line.replace('[STEP]', '').strip() + "\n"
-                elif line.startswith('[TIP]'): tip_text = line.replace('[TIP]', '').strip()
+                line_str = line.strip()
+                if line_str.startswith('[Q]'):
+                    current_section = 'q'
+                    q_text += line_str.replace('[Q]', '').strip() + " "
+                elif line_str.startswith('[CONCEPT]'):
+                    current_section = 'concept'
+                    concept_text += line_str.replace('[CONCEPT]', '').strip() + " "
+                elif line_str.startswith('[STEP]'):
+                    current_section = 'step'
+                    step_text += line_str.replace('[STEP]', '').strip() + "\n"
+                elif line_str.startswith('[TIP]'):
+                    current_section = 'tip'
+                    tip_text += line_str.replace('[TIP]', '').strip() + " "
+                else:
+                    if current_section == 'q': q_text += line_str + " "
+                    elif current_section == 'concept': concept_text += line_str + " "
+                    elif current_section == 'step': step_text += line_str + "\n"
+                    elif current_section == 'tip': tip_text += line_str + " "
             
-            if q_text:
-                parsed_data.append({
-                    "q": q_text,
-                    "concept": concept_text,
-                    "step": step_text.strip(),
-                    "tip": tip_text
-                })
+            if not q_text and not step_text:
+                q_text = block.strip()
+                step_text = "상세 풀이를 생성했습니다."
+            
+            parsed_data.append({
+                "q": q_text.strip() or "문제 내용",
+                "concept": concept_text.strip() or "핵심 개념 정리",
+                "step": step_text.strip() or "단계별 풀이 과정",
+                "tip": tip_text.strip() or "꼼꼼하게 확인해보세요!"
+            })
     return parsed_data
 
 def create_math_word_document(parsed_data):
@@ -84,8 +123,15 @@ def create_math_word_document(parsed_data):
     
     for item in parsed_data:
         row_cells = table.add_row().cells
-        row_cells[0].text = item['q']
-        row_cells[1].text = f"[핵심 개념]\n{item['concept']}\n\n[단계별 풀이]\n{item['step']}\n\n[아빠의 꿀팁]\n{item['tip']}"
+        
+        # 워드 파일용으로 기호 정돈
+        q_clean = clean_text_for_word(item['q'])
+        concept_clean = clean_text_for_word(item['concept'])
+        step_clean = clean_text_for_word(item['step'])
+        tip_clean = clean_text_for_word(item['tip'])
+        
+        row_cells[0].text = q_clean
+        row_cells[1].text = f"[핵심 개념]\n{concept_clean}\n\n[단계별 풀이]\n{step_clean}\n\n[아빠의 꿀팁]\n{tip_clean}"
                 
     doc_io = io.BytesIO()
     doc.save(doc_io)
