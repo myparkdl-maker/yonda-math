@@ -58,7 +58,7 @@ def analyze_math_image(image):
     ====
     """
     response = client.models.generate_content(
-        model='gemini-3.6-flash',
+        model='gemini-3.5-flash',
         contents=[image, prompt],
     )
     return response.text
