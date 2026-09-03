@@ -8,7 +8,7 @@ import socket
 import qrcode
 import re
 
-API_KEY = "AQ.Ab8RN6KytEbdudB-UQMK_oLPtchUwEWBs9qB7KqzY8ny5a8Xag"
+API_KEY = "AQ.Ab8RN6JeD7GDknfM9jFK3SNq7eMlc0iKMp8pEAk9NZLgw17wzA"
 client = genai.Client(api_key=API_KEY)
 
 def get_local_ip():
@@ -30,7 +30,6 @@ def get_sort_key(file):
         return name 
 
 def clean_text_for_word(text):
-    # LaTeX 기호나 특수 수식 코드를 일반 사람이 읽기 좋은 기호로 변환
     text = text.replace(r'\div', '÷')
     text = text.replace(r'\times', '×')
     text = text.replace(r'\frac{1}{2}', '1/2')
@@ -42,10 +41,7 @@ def clean_text_for_word(text):
     text = text.replace(r'\frac{1}{8}', '1/8')
     text = text.replace(r'\frac{1}{9}', '1/9')
     
-    # 일반적인 분수 형태 처리 (예: \frac{a}{b} -> a/b)
     text = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', r'\1/\2', text)
-    
-    # 마크다운 강조 기호 제거
     text = text.replace('**', '')
     text = text.replace('$', '')
     return text
@@ -124,7 +120,6 @@ def create_math_word_document(parsed_data):
     for item in parsed_data:
         row_cells = table.add_row().cells
         
-        # 워드 파일용으로 기호 정돈
         q_clean = clean_text_for_word(item['q'])
         concept_clean = clean_text_for_word(item['concept'])
         step_clean = clean_text_for_word(item['step'])
