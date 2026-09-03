@@ -47,17 +47,16 @@ def clean_text_for_word(text):
 
 def analyze_math_image(image):
     prompt = """
-    이 이미지에 있는 수학 문제를 분석해서 아래 양식에 맞춰 완벽한 해설을 작성해줘.
-    *주의*: 나누기 기호는 '\\div' 같은 코드를 쓰지 말고 반드시 일반 기호인 '÷'를 쓰고, 곱하기는 '×', 분수는 '1/2' 같은 형태로 직접 기호로 적어줘. LaTeX 코드를 절대 사용하지 마.
-    각 문제의 구분은 반드시 '===='로 해줘.
+    이 이미지에 있는 수학 문제를 완벽하게 분석해줘.
+    여러 문제가 있다면 문제 하나마다 반드시 '===='로 구분해줘.
+    반드시 아래 형식을 지켜서 작성해줘. 다른 형식을 쓰지 마.
     
-    [Q] 문제 내용 (번호와 문제 텍스트)
-    [CONCEPT] 이 문제를 푸는 데 필요한 핵심 개념이나 공식
-    [STEP] 아이가 이해하기 쉬운 상세한 단계별 풀이 과정
-    [TIP] 아빠의 친절한 조언 및 실수 방지 팁
+    [Q] 여기에 문제 번호와 전체 텍스트를 적어줘
+    [CONCEPT] 여기에 핵심 개념이나 공식을 적어줘
+    [STEP] 여기에 상세한 단계별 풀이 과정을 적어줘
+    [TIP] 여기에 아빠의 팁을 적어줘
     ====
     """
-    # 안정적인 클라우드 전용 모델로 지정
     response = client.models.generate_content(
         model='gemini-3.5-flash',
         contents=[image, prompt],
@@ -72,37 +71,28 @@ def parse_math_blocks(analyzed_blocks_list):
                 continue
             
             q_text, concept_text, step_text, tip_text = "", "", "", ""
-            current_section = None
             
-            for line in block.strip().split('\n'):
-                line_str = line.strip()
-                if line_str.startswith('[Q]'):
-                    current_section = 'q'
-                    q_text += line_str.replace('[Q]', '').strip() + " "
-                elif line_str.startswith('[CONCEPT]'):
-                    current_section = 'concept'
-                    concept_text += line_str.replace('[CONCEPT]', '').strip() + " "
-                elif line_str.startswith('[STEP]'):
-                    current_section = 'step'
-                    step_text += line_str.replace('[STEP]', '').strip() + "\n"
-                elif line_str.startswith('[TIP]'):
-                    current_section = 'tip'
-                    tip_text += line_str.replace('[TIP]', '').strip() + " "
-                else:
-                    if current_section == 'q': q_text += line_str + " "
-                    elif current_section == 'concept': concept_text += line_str + " "
-                    elif current_section == 'step': step_text += line_str + "\n"
-                    elif current_section == 'tip': tip_text += line_str + " "
+            # 정규식을 이용해 태그별 내용을 확실하게 추출
+            q_match = re.search(r'\[Q\](.*?)(?=\[CONCEPT\]|\[STEP\]|\[TIP\]|$)', block, re.DOTALL)
+            concept_match = re.search(r'\[CONCEPT\](.*?)(?=\[STEP\]|\[TIP\]|\[Q\]|$)', block, re.DOTALL)
+            step_match = re.search(r'\[STEP\](.*?)(?=\[TIP\]|\[CONCEPT\]|\[Q\]|$)', block, re.DOTALL)
+            tip_match = re.search(r'\[TIP\](.*?)(?=\[Q\]|\[CONCEPT\]|\[STEP\]|$)', block, re.DOTALL)
             
+            if q_match: q_text = q_match.group(1).strip()
+            if concept_match: concept_text = concept_match.group(1).strip()
+            if step_match: step_text = step_match.group(1).strip()
+            if tip_match: tip_text = tip_match.group(1).strip()
+            
+            # 만약 파싱이 원활하지 않았다면 블록 전체를 문제로 처리
             if not q_text and not step_text:
                 q_text = block.strip()
-                step_text = "상세 풀이를 생성했습니다."
+                step_text = "풀이 생성 완료"
             
             parsed_data.append({
-                "q": q_text.strip() or "문제 내용",
-                "concept": concept_text.strip() or "핵심 개념 정리",
-                "step": step_text.strip() or "단계별 풀이 과정",
-                "tip": tip_text.strip() or "꼼꼼하게 확인해보세요!"
+                "q": q_text or "문제 내용",
+                "concept": concept_text or "핵심 개념 정리",
+                "step": step_text or "단계별 풀이 과정",
+                "tip": tip_text or "꼼꼼하게 확인해보세요!"
             })
     return parsed_data
 
